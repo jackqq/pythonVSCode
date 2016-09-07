@@ -1,6 +1,6 @@
 "use strict";
 
-import {Variable, DebugSession, InitializedEvent, TerminatedEvent, StoppedEvent, OutputEvent, Thread, StackFrame, Scope, Source, Handles} from "vscode-debugadapter";
+import {Variable, DebugSession, InitializedEvent, TerminatedEvent, StoppedEvent, OutputEvent, Thread, StackFrame, Scope, Source, Handles, Module, ModuleEvent} from "vscode-debugadapter";
 import {ThreadEvent} from "vscode-debugadapter";
 import {DebugProtocol} from "vscode-debugprotocol";
 import {readFileSync} from "fs";
@@ -58,6 +58,7 @@ export class PythonDebugger extends DebugSession {
         response.body.supportsEvaluateForHovers = false;
         response.body.supportsFunctionBreakpoints = false;
         response.body.supportsSetVariable = true;
+        response.body.supportsCompletionsRequest = true;
         response.body.exceptionBreakpointFilters = [
             {
                 label: "All Exceptions",
@@ -107,6 +108,9 @@ export class PythonDebugger extends DebugSession {
         this.pythonProcess.on("detach", () => this.onDetachDebugger());
         this.pythonProcess.on("error", ex => this.sendEvent(new OutputEvent(ex, "stderr")));
         this.pythonProcess.on("asyncBreakCompleted", arg => this.onPythonProcessPaused(arg));
+        this.pythonProcess.on("completionCompleted", arg => {
+            let x = '';
+        });
 
         this.debugServer.on("detach", () => this.onDetachDebugger());
     }
@@ -133,6 +137,7 @@ export class PythonDebugger extends DebugSession {
         this.sendEvent(new StoppedEvent("user request", pyThread.Id));
     }
     private onPythonModuleLoaded(module: IPythonModule) {
+        this.sendEvent(new ModuleEvent("new", new Module(module.ModuleId, module.Name)));
     }
     private debuggerHasLoaded: boolean;
     private onPythonProcessLoaded(pyThread: IPythonThread) {
@@ -358,7 +363,7 @@ export class PythonDebugger extends DebugSession {
             let pathRelativeToSourceRoot = '';
             // It is possible we're dealing with cross platform debugging
             // If so, then path.relative won't work :(
-            if (remotePath.toUpperCase().startsWith(this.attachArgs.remoteRoot.toUpperCase())){
+            if (remotePath.toUpperCase().startsWith(this.attachArgs.remoteRoot.toUpperCase())) {
                 pathRelativeToSourceRoot = remotePath.substring(this.attachArgs.remoteRoot.length);
             } else {
                 // get the part of the path that is relative to the source root
@@ -637,6 +642,9 @@ export class PythonDebugger extends DebugSession {
     }
     // protected stepInTargetsRequest(response: DebugProtocol.StepInTargetsResponse, args: DebugProtocol.StepInTargetsArguments): void;
     // protected gotoTargetsRequest(response: DebugProtocol.GotoTargetsResponse, args: DebugProtocol.GotoTargetsArguments): void;
+    protected completionsRequest(response: DebugProtocol.CompletionsResponse, args: DebugProtocol.CompletionsArguments) {
+        this.pythonProcess.getCompletion(args.frameId, args.text);
+    }
 }
 
 DebugSession.run(PythonDebugger);
